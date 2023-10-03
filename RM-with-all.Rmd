@@ -1,6 +1,8 @@
 ---
 title: "Recognition Memory"
-output: pdf_document
+output:
+  word_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include = FALSE}
@@ -9,13 +11,46 @@ library(afex)
 library(BayesFactor)
 library(apa)
 knitr::opts_chunk$set(echo = FALSE)
+# function to force scientific formatting of numbers (used for large BFs)
+changeSciNot <- function(n) {
+  output <- format(n, scientific = TRUE, digits = 2) #Transforms the number into scientific notation even if small
+  output <- sub("e", "x10^", output) #Replace e with 10^
+  output <- sub("\\+0?", "", output) #Remove + symbol and leading zeros on exponent, if > 1
+  output <- sub("-0?", "-", output) #Leaves - symbol but removes leading zeros on exponent, if < 1
+  output <- paste0(output,"^")
+  # output = strsplit(output, "^", fixed = TRUE)
+  # output = paste0(output[[1]][1],"^", output[[1]][2], "^")
+  output
+}
+
+# function to extract and report BFs with error %s
+report_BF_and_error <- function(BF_in, sci_not = TRUE, hyp = "alt"){
+  
+  if (hyp == "alt") {
+    BF_notation = "BF~10~ = "
+  } else if (hyp == "null") {
+    BF_notation = "BF~01~ = "
+  }
+  
+  if (sci_not == TRUE) {
+    BF_value = changeSciNot(extractBF(BF_in)$bf) # change to sci notation
+  } else {
+    BF_value = round(extractBF(BF_in)$bf,2) # otherwise round
+  }
+  
+  paste0(BF_notation, 
+         BF_value, 
+         " &plusmn; ", 
+         round(100*extractBF(BF_in)$error,2), 
+         "%")
+}
 ```
 
-# Design
+# Method
 
-28 subjects were used. Experiment consisted in 3 training phases, followed by a test phase. In training, for a total of 16 blocks, 4 different types of cue1, 4 different types of cue2, and 2 outcomes were presented. The image dispalyed in each type of cue was randomly asigned for each participant. Both phase 1 and 2 comprised 2 blocks, whereas phase 3 consisted on 12 blocks. All blocks were a sequence of 10 trials. In each trial, a cue1 and a cue2 were presented, followed by an outcome. In phase 1, there were 2 types of cue1 (1 and 2) and 2 types of cue2 (5 and 6), thus creating 4 different combinations that were repeated 5 times across the phase (those that were presented 2 times in the first block were presented 3 in the second and vice versa). Cue 1 was always paired with outcome 1 (10 times total) and cue 2 was always paired with outcome 2, whereas cues 5 and 6 where paired with each outcome half of the times. In phase 2 there were 2 different types of cue1 (3 and 4) and 2 types of cue2 (7 and 8), thus creating 4 different combinations that were repeated 5 times across the phase (those that were presented 2 times in the first block were presented 3 in the second and vice versa). Cue 3 was paired with outcome 1 with a 0.8 contingency, being the rest of trials paired with outcome 2. The opposite was true for cue 4 (note that the distribution across blocks is uneven), and cues 7 and 8 where paired with each outcome half of the times. In phase 3, the stimuli combinations from the two previous phases were intermixed, so each combination was presented 15 times (again, blocks were uneven). The contingencies between cues and outcomes where maintained as in the previous phases. In this training phase, on each trial, the participants had to predict the probable outcome of the cues presented, and the response given as well as the reaction time (RT) were recorded. Based on the programmed contingencies, an additional measure of accuracy was computed, comparing the most probable outcome (that is, the outcome with a higher contingency with cue1) with the response emitted by the participant.
+28 subjects were used. Experiment consisted in 3 training phases, followed by a test phase. In training, for a total of 8 blocks, 4 different types of cue1, 4 different types of cue2, and 2 outcomes were presented. The image dispalyed in each type of cue was randomly asigned for each participant. Both phase 1 and 2 comprised 1 blocks, whereas phase 3 consisted on 6 blocks. All blocks were a sequence of 20 trials. In each trial, a cue1 and a cue2 were presented, followed by an outcome. In phase 1, there were 2 types of cue1 (1 and 2) and 2 types of cue2 (5 and 6), thus creating 4 different combinations that were repeated 10 times across the phase. Cue 1 was always paired with outcome 1 and cue 2 was always paired with outcome 2, whereas cues 5 and 6 where paired with each outcome half of the times. In phase 2 there were 2 different types of cue1 (3 and 4) and 2 types of cue2 (7 and 8), thus creating 4 different combinations that were repeated 10 times across the phase. Cue 3 was paired with outcome 1 with a 0.8 contingency, being the rest of trials paired with outcome 2. The opposite was true for cue 4, and cues 7 and 8 where paired with each outcome half of the times. In phase 3, the stimuli combinations from the two previous phases were intermixed. The contingencies between cues and outcomes where maintained as in the previous phases. In this training phase, on each trial, the participants had to predict the probable outcome of the cues presented, and the response given as well as the reaction time (RT) were recorded. Based on the programmed contingencies, an additional measure of accuracy was computed, comparing the most probable outcome (that is, the outcome with a higher contingency with cue1) with the response emitted by the participant.
 
-In test phase, the participants were presented each of the 8 cues twice, together with a similar yet new cue, and where asked to choose what cue they had seen before, as well as rating how sure they were of their response. The rating RT was also recorded. A memory score was computed, taking the rating given to the cue in positive when the response was right, and in negative when it was wrong.
+In test phase, the participants were presented each of the 8 cues twice, together with a similar yet new cue, and where asked to choose what cue they had seen before, as well as rating how sure they were of their response. The rating RT was also recorded. A memory score was computed, taking the rating given to the cue in positive when the response was right, and in negative when it was wrong. A corrected version of this score was also computed in order to clean the noise of errors, taking into account just the ratings of the trials in which the participant chose the right stimulus.
 
 +------------+-------------------------+------------------------+------------+
 | Phase 1    | Phase 2                 | Phase 3                | Test       |
@@ -55,6 +90,7 @@ As can be seen in the Figure below, the accuracy to the certain cues increased d
 
 ```{r, include=FALSE}
 #create phases dataframes
+merged_data <- mutate(merged_data, block_real = rep(1:8, each = 20), .after = block)
 
 #change -99 values for NA
 merged_data["prob_response"][merged_data["prob_response"] == -99] <- NA
@@ -65,17 +101,17 @@ merged_data <- mutate(merged_data,
                cue_type = case_when(cue1 == 1 | cue1 == 2 ~ "certain",
   cue1 == 3 | cue1 == 4 ~ "uncertain"))
 MA_training <- merged_data %>%
-  group_by(phase, cue_type, block) %>%
+  group_by(phase, cue_type, block_real) %>%
   summarise(mean_accuracy = mean(prob_response, na.rm = TRUE), 
             sd_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
 ```
 
 ```{r}
 #plot accuracy
-ggplot(MA_training, mapping = aes(x = block, y = mean_accuracy, color = cue_type)) +
+ggplot(MA_training, mapping = aes(x = block_real, y = mean_accuracy, color = cue_type)) +
   geom_point() +
   geom_line() +
-  geom_errorbar(aes(x= block, y = mean_accuracy, ymin = mean_accuracy-sd_accuracy, ymax = mean_accuracy+sd_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
+  geom_errorbar(aes(x= block_real, y = mean_accuracy, ymin = mean_accuracy-sd_accuracy, ymax = mean_accuracy+sd_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
   facet_grid(cols = vars(phase), space = "free_x", scales = "free_x") + 
   scale_x_continuous(breaks = c(seq (1, 16, 1))) +
   scale_y_continuous(name="Accuracy", limits=c(0.45, 1)) +
@@ -87,44 +123,30 @@ phase1 <- filter(merged_data, phase == 1)
 phase2 <- filter(merged_data, phase == 2)
 phase3 <- filter(merged_data, phase == 3)
 
-#t-test >.5
-mean_phase1 <- phase1 %>%
+#t test to check >.5
+mean_cert <- filter(merged_data, cue_type == "certain") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_phase1, mu = .5, alternative = "greater") #p-value = 2.317e-10
+cert_t <- t.test(mean_cert, mu = .5, alternative = "greater")
 
-mean_phase2 <- phase2 %>%
+mean_uncert <- filter(merged_data, cue_type == "uncertain") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_phase2, mu = .5, alternative = "greater") #p-value = 3.183e-10
-
-mean_cert_phase3 <- filter(phase3, cue_type == "certain") %>%
-  group_by(pNum) %>%
-   summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_cert_phase3, mu = .5, alternative = "greater") #p-value = 2.056e-10
-
-mean_uncert_phase3 <- filter(phase3, cue_type == "uncertain") %>%
-  group_by(pNum) %>%
-   summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_uncert_phase3, mu = .5, alternative = "greater") #p-value = 2.661e-10
-
-#ANOVAS with the exp effect
-#prepare ANOVA phase 1
-exp_response_phase1 <- phase1 %>%
-  group_by (exp_code, pNum, block) %>%
+uncert_t <- t.test(mean_cert, mu = .5, alternative = "greater")
+```
+```{r, include = FALSE}
+#t.test for the experiment
+mean_exp_phase1 <- phase1 %>%
+  group_by(pNum, exp_code) %>%
   summarise(mean_response = mean(prob_response, na.rm = TRUE))
-exp_response_phase1$exp_code <- factor(exp_response_phase1$exp_code)
-exp_response_phase1$block <- factor(exp_response_phase1$block)
-exp_response_phase1$pNum <- factor(exp_response_phase1$pNum)
-
-#prepare ANOVA phase 2
-exp_response_phase2 <- phase2 %>%
-  group_by (exp_code, pNum, block) %>%
+exp_p1_t <- t.test(mean_response ~ exp_code, mean_exp_phase1, var.equal = TRUE)
+mean_exp_phase2 <- phase2 %>%
+  group_by(pNum, exp_code) %>%
   summarise(mean_response = mean(prob_response, na.rm = TRUE))
-exp_response_phase2$exp_code <- factor(exp_response_phase2$exp_code)
-exp_response_phase2$block <- factor(exp_response_phase2$block)
-exp_response_phase2$pNum <- factor(exp_response_phase2$pNum)
-
+exp_p2_t <- t.test(mean_response ~ exp_code, mean_exp_phase2, var.equal = TRUE)
+```
+Mean responding throughout the experiment was significantly above chance for both certain and uncertain cues, as confirmed by a one sample t test (Certain: `r apa(cert_t)`, Uncertain: `r apa(uncert_t)`). Also, its worth noting that neither in phase 1 nor phase 2 there were significant differences in responding due to the experiment the data came from (`r apa(exp_p1_t)`; `r apa(exp_p2_t)`)
+```{r}
 #preapare ANOVA phase 3
 exp_response_phase3 <- phase3 %>%
   group_by (exp_code, pNum, block, cue_type) %>%
@@ -134,109 +156,33 @@ exp_response_phase3$block <- factor(exp_response_phase3$block)
 exp_response_phase3$cue_type <- factor(exp_response_phase3$cue_type)
 exp_response_phase3$pNum <- factor(exp_response_phase3$pNum)
 
-# ANOVA 1 with exp_code
-exp_ANOVA_p1_resp <-  aov_car(formula = mean_response ~ exp_code + Error(pNum/block), data = exp_response_phase1)
-exp_bay_ANOVA_p1_resp <- anovaBF(formula = mean_response ~ block*exp_code + pNum,
-        data = data.frame(exp_response_phase1),
-        whichRandom = "pNum")
-exp_bay_ANOVA_p1_resp [4] / exp_bay_ANOVA_p1_resp [3]
-
-#ANOVA 2 with exp_code
-exp_ANOVA_p2_resp <- aov_car(formula = mean_response ~ exp_code + Error(pNum/block), data = exp_response_phase2)
-exp_bay_ANOVA_p2_resp <- anovaBF(formula = mean_response ~ block*exp_code + pNum,
-        data = data.frame(exp_response_phase2),
-        whichRandom = "pNum")
-exp_bay_ANOVA_p2_resp [4] / exp_bay_ANOVA_p2_resp [3]
-
 #ANOVA 3 with exp_code
 exp_ANOVA_p3_resp <- aov_car(formula = mean_response ~ exp_code + Error(pNum/block*cue_type), data = exp_response_phase3)
 exp_bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ block*cue_type*exp_code + pNum,
         data = data.frame(exp_response_phase3),
         whichRandom = "pNum")
-exp_bay_ANOVA_p3_resp [4] / exp_bay_ANOVA_p3_resp [3]
-exp_bay_ANOVA_p3_resp [10] / exp_bay_ANOVA_p3_resp [6]
-exp_bay_ANOVA_p3_resp [18] / exp_bay_ANOVA_p3_resp [17]
-#it prints a warning message that participant 1 and 7 have been removed because some cells are missing
-#let's modify the data so we can perform the analysis with chunkcs of 2 blocks
-corrected_phase3 <-  mutate(phase3, 
-               twoblocks = case_when(block == 5 | block == 6 ~ 1,
-                                    block == 7 | block == 8 ~ 2,
-                                    block == 9 | block == 10 ~ 3,
-                                    block == 11 | block == 12 ~ 4,
-                                    block == 13 | block == 14 ~ 5,
-                                    block == 15 | block == 16 ~ 6,))
-#now anova on that
-exp_c_response_phase3 <- corrected_phase3 %>%
-  group_by (exp_code, pNum, twoblocks, cue_type) %>%
-  summarise(mean_response = mean(prob_response, na.rm = TRUE))
-exp_c_response_phase3$exp_code <- factor(exp_c_response_phase3$exp_code)
-exp_c_response_phase3$twoblocks <- factor(exp_c_response_phase3$twoblocks)
-exp_c_response_phase3$cue_type <- factor(exp_c_response_phase3$cue_type)
-exp_c_response_phase3$pNum <- factor(exp_c_response_phase3$pNum)
-exp_c_ANOVA_p3_resp <- aov_car(formula = mean_response ~ exp_code + Error(pNum/twoblocks*cue_type), data = exp_c_response_phase3)
-exp_c_bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ twoblocks*cue_type*exp_code + pNum,
-        data = data.frame(exp_c_response_phase3),
-        whichRandom = "pNum")
-# Calculate interaction Bayes Factor
-exp_c_bay_ANOVA_p3_resp[4] / exp_c_bay_ANOVA_p3_resp[3]
-exp_c_bay_ANOVA_p3_resp[10] / exp_c_bay_ANOVA_p3_resp[6]
-exp_c_bay_ANOVA_p3_resp[18] / exp_c_bay_ANOVA_p3_resp[17]
-```
+expxblock_int <- exp_bay_ANOVA_p3_resp [4] / exp_bay_ANOVA_p3_resp [3]
+expxcue_int <- exp_bay_ANOVA_p3_resp [10] / exp_bay_ANOVA_p3_resp [6]
+expxcuexblock_int <- exp_bay_ANOVA_p3_resp [18] / exp_bay_ANOVA_p3_resp [17]
 
-In phase 1, nor the main effect of the experiment or it's interaction with the block were significant (`r apa(exp_ANOVA_p1_resp, effect = "exp_code", format = "rmarkdown")`, `r apa(exp_ANOVA_p1_resp, effect = "exp_code:block", format = "rmarkdown")`). For both, anecdotal evidence for the null hypothesis was found (*BF* = 0.3483414 ±0.91%, *BF* = 0.3277184 ±2.62%). Similar results were found in phase 2 (`r apa(exp_ANOVA_p2_resp, effect = "exp_code", format = "rmarkdown")`, `r apa(exp_ANOVA_p2_resp, effect = "exp_code:block", format = "rmarkdown")`), with still anecdotal evidence against the effect of the experiment (*BF* = 0.3355596 ±1.02%), but anecdotal evidence in favor of the effect of the interaction of the experiment and block. Again, in phase 3, there were no significant effect of the experiment or any of the interactions with that effect (Exp: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code", format = "rmarkdown")`, ExpxBlocks: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:twoblocks", format = "rmarkdown")`, ExpxCue: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:cue_type", format = "rmarkdown")`, ExpxBlocksxCue `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:twoblocks:cue_type", format = "rmarkdown")`). Bayesian analysis yielded anecdotal evidence against the main effect (*BF* = 0.3491084 ±0.79%), moderate null evidence for the ExpxCue and ExpXBlocks interactions (*BF* = 0.2307687 ±7.63%, *BF* = 0.1490516 ±1.47%), and very strong evidence for the null hypothesis in the ExpxBlocksxCue interaction (*BF*= 0.06828904 ±3.2%). Given that the effect of the experiment did not seem to have a significant effect on the results, they were re-analysed without including the experiment as a factor.
+```
+In phase 3, there were no significant effects of the experiment or any of the interactions with that effect (Exp: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code", format = "rmarkdown")`, ExpxBlocks: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:twoblocks", format = "rmarkdown")`, ExpxCue: `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:cue_type", format = "rmarkdown")`, ExpxBlocksxCue `r apa(exp_c_ANOVA_p3_resp, effect = "exp_code:twoblocks:cue_type", format = "rmarkdown")`). Bayesian analysis yielded moderate evidence for the null hypothesis regarding the main effect and the ExpxCue interaction (`r report_BF_and_error(exp_bay_ANOVA_p3_resp[1])`; `r report_BF_and_error(expxcue_int[1])`), and very strong evidence for the null hypothesis in the ExpxBlocks and ExpxBlocksxCue interactions (`r report_BF_and_error(expxblock_int[1])`; `r report_BF_and_error(expxcuexblock_int[1])`). Given that the effect of the experiment did not seem to have a significant effect on the results, they were re-analysed without including the experiment as a factor. Due to this evidence, the effects of the experiment are removed from the following analyses.
 
 ```{r, include = FALSE}
-#prepare ANOVA phase 1
-response_phase1 <- phase1 %>%
-  group_by (exp_code, pNum, block) %>%
-  summarise(mean_response = mean(prob_response, na.rm = TRUE))
-response_phase1$exp_code <- factor(response_phase1$exp_code)
-response_phase1$block <- factor(response_phase1$block)
-response_phase1$pNum <- factor(response_phase1$pNum)
-
-#prepare ANOVA phase 2
-response_phase2 <- phase2 %>%
-  group_by (exp_code, pNum, block) %>%
-  summarise(mean_response = mean(prob_response, na.rm = TRUE))
-response_phase2$exp_code <- factor(response_phase2$exp_code)
-response_phase2$block <- factor(response_phase2$block)
-response_phase2$pNum <- factor(response_phase2$pNum)
-
 #prepare ANOVA phase 3
-corrected_phase3 <-  mutate(phase3, 
-               twoblocks = case_when(block == 5 | block == 6 ~ 1,
-                                    block == 7 | block == 8 ~ 2,
-                                    block == 9 | block == 10 ~ 3,
-                                    block == 11 | block == 12 ~ 4,
-                                    block == 13 | block == 14 ~ 5,
-                                    block == 15 | block == 16 ~ 6,))
-c_response_phase3 <- corrected_phase3 %>%
-  group_by (pNum, twoblocks, cue_type) %>%
-  summarise(mean_response = mean(prob_response, na.rm = TRUE)) 
-c_response_phase3$twoblocks <- factor(c_response_phase3$twoblocks)
-c_response_phase3$cue_type <- factor(c_response_phase3$cue_type)
-c_response_phase3$pNum <- factor(c_response_phase3$pNum)
-
-#ANOVAS
-ANOVA_p1_resp <-  aov_car(formula = mean_response ~  Error(pNum/block), data = response_phase1)
-bay_ANOVA_p1_resp <- anovaBF(formula = mean_response ~ block + pNum,
-        data = data.frame(response_phase1),
+response_phase3 <- phase3 %>%
+  group_by (pNum, block_real, cue_type) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+response_phase3$block_real <- factor(response_phase3$block_real)
+response_phase3$cue_type <- factor(response_phase3$cue_type)
+response_phase3$pNum <- factor(response_phase3$pNum)
+ANOVA_p3_resp <- aov_car(formula = mean_response ~ Error(pNum/block_real*cue_type), data = response_phase3)
+bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ block_real*cue_type + pNum,
+        data = data.frame(response_phase3),
         whichRandom = "pNum")
-
-ANOVA_p2_resp <- aov_car(formula = mean_response ~  + Error(pNum/block), data = response_phase2)
-bay_ANOVA_p2_resp <- anovaBF(formula = mean_response ~ block + pNum,
-        data = data.frame(response_phase2),
-        whichRandom = "pNum")
-
-c_ANOVA_p3_resp <- aov_car(formula = mean_response ~  Error(pNum/twoblocks*cue_type), data = c_response_phase3)
-c_bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ twoblocks*cue_type + pNum,
-        data = data.frame(c_response_phase3),
-        whichRandom = "pNum")
-c_bay_ANOVA_p3_resp[4] / c_bay_ANOVA_p3_resp[3]
-
+bay_ANOVA_p3_int <- bay_ANOVA_p3_resp[4]/bay_ANOVA_p3_resp[3]
 ```
-
-A within-subject ANOVA for phase 1 showed a significant effect of the block (`r apa(ANOVA_p1_resp, effect = "block", format = "rmarkdown")`), for which very strong evidence was found (*BF* = 43.84792 ±1.13%). This indicated that the accuracy to certain cues increased from block 1 to block 2. However, in phase 2, there was not a significant effect of the block (`r apa(ANOVA_p2_resp, effect = "block", format = "rmarkdown")`), finding anecdotal evidence for the null hypothesis (*BF* = 0.7254381 ±0.97%), indicating that participants did not improved their accuracy in phase 2. Regarding phase 3, both the main effect of the type of cue and the blocks were significant (Blocks: `r apa(c_ANOVA_p3_resp, effect = "twoblocks", format = "rmarkdown")`, Cue type: `r apa(c_ANOVA_p3_resp, effect = "cue_type", format = "rmarkdown")`), as well as the interaction between them (`r apa(c_ANOVA_p3_resp, effect = "twoblocks:cue_type", format = "rmarkdown")`). There was extreme strong evidence for both main effects (*BF* = 496.378 ±0.52%, *BF* = 893649670 ±0.84%), but there was moderate evidence for the null hypothesis in the interaction (*BF* = 0.1988564 ±2%). This indicates that all subjects improved their performance as training progressed, and that accuracy was better for certain than uncertain cues, especially at the end of the experiment.
+A within-subject ANOVA for phase 3 yielded significant differences for all effects, being the evidence very strong for both the blocks and the cue, but moderate in favor of the null for the interaction (Block: `r apa(ANOVA_p3_resp, effect = "block_real")`, `r report_BF_and_error(bay_ANOVA_p3_resp[1])`; Cue: `r apa(ANOVA_p3_resp, effect = "cue_type")`, `r report_BF_and_error(bay_ANOVA_p3_resp[2])`; interaction: `r apa(ANOVA_p3_resp, effect = "block_real:cue_type")`, `r report_BF_and_error(bay_ANOVA_p3_int[1])` ). This indicates that all subjects improved their performance as training progressed, and that accuracy was better for certain than uncertain cues, especially at the end of the experiment.
 
 ## Test phase
 
